@@ -7,6 +7,7 @@
 #import <YouTubeHeader/YTPlayerOverlay.h>
 #import <YouTubeHeader/YTPlayerOverlayProvider.h>
 #import <YouTubeHeader/YTReelModel.h>
+#import <YouTubeHeader/YTReelNonVideoContentModel.h>
 #import <HBLog.h>
 
 %hook YTGlobalConfig
@@ -93,11 +94,19 @@
 
 %end
 
+static BOOL isAdsReelContentModel(YTReelContentModel *model) {
+    if ([model respondsToSelector:@selector(videoType)])
+        return ((YTReelModel *)model).videoType == 3;
+    if ([model isKindOfClass:%c(YTReelNonVideoContentModel)])
+        return [[[(YTReelNonVideoContentModel *)model renderer].customData description] containsString:@"YTIReelNonVideoAdsCustomData_reelNonVideoAdsCustomData"];
+    return NO;
+}
+
 %hook YTReelDataSource
 
-- (YTReelModel *)makeContentModelForEntry:(id)entry {
-    YTReelModel *model = %orig;
-    if ([model respondsToSelector:@selector(videoType)] && model.videoType == 3)
+- (YTReelContentModel *)makeContentModelForEntry:(id)entry {
+    YTReelContentModel *model = %orig;
+    if (isAdsReelContentModel(model))
         return nil;
     return model;
 }
@@ -107,9 +116,9 @@
 // For newer YouTube versions
 %hook YTReelContentModel
 
-+ (YTReelModel *)makeContentModelForEntry:(id)entry {
-    YTReelModel *model = %orig;
-    if ([model respondsToSelector:@selector(videoType)] && model.videoType == 3)
++ (YTReelContentModel *)makeContentModelForEntry:(id)entry {
+    YTReelContentModel *model = %orig;
+    if (isAdsReelContentModel(model))
         return nil;
     return model;
 }
@@ -118,16 +127,16 @@
 
 %hook YTReelInfinitePlaybackDataSource
 
-- (YTReelModel *)makeContentModelForEntry:(id)entry {
-    YTReelModel *model = %orig;
-    if ([model respondsToSelector:@selector(videoType)] && model.videoType == 3)
+- (YTReelContentModel *)makeContentModelForEntry:(id)entry {
+    YTReelContentModel *model = %orig;
+    if (isAdsReelContentModel(model))
         return nil;
     return model;
 }
 
-- (void)setReels:(NSMutableOrderedSet <YTReelModel *> *)reels {
-    [reels removeObjectsAtIndexes:[reels indexesOfObjectsPassingTest:^BOOL(YTReelModel *obj, NSUInteger idx, BOOL *stop) {
-        return [obj respondsToSelector:@selector(videoType)] ? obj.videoType == 3 : NO;
+- (void)setReels:(NSMutableOrderedSet <YTReelContentModel *> *)reels {
+    [reels removeObjectsAtIndexes:[reels indexesOfObjectsPassingTest:^BOOL(YTReelContentModel *obj, NSUInteger idx, BOOL *stop) {
+        return isAdsReelContentModel(obj);
     }]];
     %orig;
 }
